@@ -16,11 +16,13 @@ library(BBmisc)
 
 setwd("C:\\Users\\Richie\\iCloudDrive\\PHD\\Classes\\DS\\Machine Learning\\Final\\Data\\")
 df <- fread("C:\\Users\\Richie\\iCloudDrive\\PHD\\Classes\\DS\\Machine Learning\\Final\\Data\\Parking_01102021.csv", 
-            nrow = 500000, stringsAsFactors = T)
+            nrow = 20000, stringsAsFactors = T)
 
 ## Cleaning data
 df <- df[, -c("summons_number", "summons_image")]
-df <- df[df$violation_status %in% c("HEARING HELD-GUILTY",  "HEARING HELD-GUILTY REDUCTION", "HEARING HELD-NOT GUILTY")]
+df$violation_status <- as.character(df$violation_status)
+df <- df[df$violation_status %in% c("" ,"HEARING HELD-GUILTY",  "HEARING HELD-GUILTY REDUCTION", "HEARING HELD-NOT GUILTY")]
+df$violation_status[df$violation_status == ''] <- 'NO DISPUTE SUBMITTED'
 df <- df[!is.na(df$violation_time)]
 
 
@@ -94,21 +96,22 @@ df_cleaned <- data.table(cbind(df_cleaned[,!(colnames(df_cleaned) == "violation_
 
 ## let i1 = HEARING HELD-GUILTY, i2 = HEARING HELD-GUILTY REDUCTION, i3 = "HEARING HELD-NOT GUILTY"
 
-training_index<- sample(1:nrow(df_cleaned), floor(nrow(df_cleaned) *0.7))
-
-df_cleaned_train <- df_cleaned[training_index,]
-df_cleaned_test <- df_cleaned[-training_index,]
-
-
-df_tuple <- df_cleaned_train[, setdiff(names(df_cleaned_train), "violation_status_rc"), with = F]
-df_class <- df_cleaned_train[,violation_status_rc]
-
- 
-## missing feature reduction, using all features for now
-
-R1 = t(as.matrix(df_tuple[df_class == 'HEARING HELD-GUILTY']))
-R2 = t(as.matrix(df_tuple[df_class == 'HEARING HELD-GUILTY REDUCTION']))
-R3 = t(as.matrix(df_tuple[df_class == 'HEARING HELD-NOT GUILTY']))
+  training_index<- sample(1:nrow(df_cleaned), floor(nrow(df_cleaned) *0.5))
+  
+  df_cleaned_train <- df_cleaned[training_index,]
+  df_cleaned_test <- df_cleaned[-training_index,]
+  
+  
+  df_tuple <- df_cleaned_train[, setdiff(names(df_cleaned_train), "violation_status_rc"), with = F]
+  df_class <- df_cleaned_train[,violation_status_rc]
+  
+   
+  ## missing feature reduction, using all features for now
+  
+  R1 = t(as.matrix(df_tuple[df_class == 'HEARING HELD-GUILTY']))
+  R2 = t(as.matrix(df_tuple[df_class == 'HEARING HELD-GUILTY REDUCTION']))
+  R3 = t(as.matrix(df_tuple[df_class == 'HEARING HELD-NOT GUILTY']))
+  R4 = t(as.matrix(df_tuple[df_class == 'NO DISPUTE SUBMITTED']))
 R = t(as.matrix(df_tuple))
  
 get_z <-  function(R){
@@ -130,37 +133,29 @@ get_sigma <- function(R, mu = get_mu(R), Z = get_z(R)) {
 }
 
 
-
-get_sigma(R1)
-get_sigma(R2)
-get_sigma(R3)
-
-
 get_lambda <- function(R) {
   R <- as.matrix(R)
   lambda <- eigen(get_sigma(R))$values
   return(lambda)
 }
 
-lambda1 <- get_lambda(R1)
 
-lambda1
+sum(get_lambda(R1)[1:i]) / sum(get_lambda(R1))
 
 
-get_Ec <- function(R, f = .96){
-  sigma <- get_sigma(R) 
-  for (n in 1: ncol(sigma)){
-    f_test <- sum(diag(sigma[1:n,1:n])) / sum(diag(sigma))
-    if (f_test >= f) {
-      return(list(vn = diag(sigma[1:n-1,1:n-1]),
-                  n = n))
-      break
-    }
-  }
+
+get_Ec <- function(R, f){
+  lambda <- get_lambda(R)
+   for (Ec in length(lambda)){
+     if(sum(lambda[1:Ec]) / sum(lambda) >= f){
+       return(list(vn = lambda[1:Ec],
+                   n = Ec))
+     }
+   }
 }
 
 
-get_Sc <- function(R, f = .96) {
+get_Sc <- function(R, f) {
   # for (i in 1:get_Ec(R, f)$n) {
   #   if (i == 1) { p <- 0 } else
   #   p <- p + eigen(get_sigma(R))$vectors[,i] %*% t(eigen(get_sigma(R))$vectors[,i])
@@ -171,8 +166,8 @@ get_Sc <- function(R, f = .96) {
 }
 
 
-get_y <- function(R, f = 0.96) {
-  y <- t(get_Sc(R, 0.7)) %*% R
+get_y <- function(R, f) {
+  y <- t(get_Sc(R, f)) %*% R
   return(y)
 }
 
@@ -192,9 +187,9 @@ get_training_seq <- function(R, f) {
     if (i == 1) {
       dc_sq_train <- c()
       
-      Sc_R <-  get_Sc(R, 0.7)
+      Sc_R <-  get_Sc(R, f)
       mu_R <- get_mu(R)
-      sigma_R <- get_sigma(R, 0.7)
+      sigma_R <- get_sigma(R, f)
     }
     
     dc_sq_train <-
@@ -210,12 +205,6 @@ get_training_seq <- function(R, f) {
   }
   return(dc_sq_train[order(dc_sq_train)])
 }
-
-df_cleaned_test[1, setdiff(names(df_cleaned_train), "violation_status_rc"), with = F]
-
-x_test = t(as.matrix(df_cleaned_test[1, setdiff(names(df_cleaned_train), "violation_status_rc"), with = F]))
-x_true = df_cleaned_test[1, violation_status_rc]
-
 
 get_tested <- function(x_test,  R, f, training_seq = get_training_seq(R, f)) {
   dcsq_test <- get_dcsq(x_test,R = R, f = f)
@@ -236,9 +225,10 @@ get_assignment <- function(x_test, training_seq, f, p0 = 0.5) {
   pc1 <- get_tested(x_test, R1, f, training_seq_1)
   pc2 <- get_tested(x_test, R2, f, training_seq_2)
   pc3 <- get_tested(x_test, R3, f, training_seq_3)
+  pc4 <- get_tested(x_test, R4, f, training_seq_4)
   
-  lbs <- c('HEARING HELD-GUILTY',  'HEARING HELD-GUILTY REDUCTION', 'HEARING HELD-NOT GUILTY')
-  pc <- c(pc1, pc2, pc3)
+  lbs <- c('HEARING HELD-GUILTY',  'HEARING HELD-GUILTY REDUCTION', 'HEARING HELD-NOT GUILTY', 'NO DISPUTE SUBMITTED')
+  pc <- c(pc1, pc2, pc3, pc4)
   result<- data.frame(pc, lbs)
   
   if (min(result$pc > p0)){
@@ -248,25 +238,47 @@ get_assignment <- function(x_test, training_seq, f, p0 = 0.5) {
   }
 }
 
-get_assignment(x_test, f = 0.7)
 
-for (i in 1 : 3000){
-  if (i == 1) {
-    result <- data.frame()
-    training_seq_1 <- get_training_seq(R1, 0.7)
-    training_seq_2 <- get_training_seq(R2, 0.7)
-    training_seq_3 <- get_training_seq(R3, 0.7)
+f = 0.4
+
+for (p0 in seq(0.5,1,0.05) ){
+  if (p0 == 0.5){
+    p0_rate <- data.frame()
   }
   
-  x_test = t(as.matrix(df_cleaned_test[i, setdiff(names(df_cleaned_train), "violation_status_rc"), with = F]))
-  x_true = df_cleaned_test[i, violation_status_rc]
-  x_asgn = get_assignment(x_test, f = 0.7)
-  
-  result <- rbind(result, data.frame(i, x_asgn, x_true))
-  
+
+  for (i in 1 : nrow(df_cleaned_test)){
+    if (i == 1) {
+      result <- data.frame()
+      training_seq_1 <- get_training_seq(R1, f)
+      training_seq_2 <- get_training_seq(R2, f)
+      training_seq_3 <- get_training_seq(R3, f)
+      training_seq_4 <- get_training_seq(R4, f)
+      timer <- Sys.time()
+    }
+    
+    x_test = t(as.matrix(df_cleaned_test[i, setdiff(names(df_cleaned_train), "violation_status_rc"), with = F]))
+    x_true = df_cleaned_test[i, violation_status_rc]
+    x_asgn = get_assignment(x_test, f = f , p0 = p0)
+    
+    result <- rbind(result, data.frame(i, x_asgn, x_true))
+    
+    if (i %% 1000 == 0) {
+      print(i)
+      print(paste("running time", Sys.time() - timer))
+    } else if(i == nrow(df_cleaned_test)) {
+      print(paste("total running time: ", Sys.time() - timer))
+    }
+    
+  }
+
+
+p0_rate <- rbind(p0_rate, 
+                 data.frame(
+                   p0, 
+                   accur = nrow(result[as.character(result$x_asgn) == as.character(result$x_true),]) / nrow(result),
+                   reserved = nrow(result[as.character(result$x_asgn) == 'NO DISPUTE SUBMITTED',]) / nrow(result)
+                   ))
+
 }
-
-
-nrow(result[as.character(result$x_asgn) == as.character(result$x_true),]) / nrow(result)
-
 

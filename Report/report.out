@@ -1,0 +1,16 @@
+\BOOKMARK [1][-]{section.1}{Abstract}{}% 1
+\BOOKMARK [1][-]{section.2}{Introduction}{}% 2
+\BOOKMARK [2][-]{subsection.2.1}{Dataset}{section.2}% 3
+\BOOKMARK [2][-]{subsection.2.2}{Algorithm}{section.2}% 4
+\BOOKMARK [3][-]{subsubsection.2.2.1}{Calculate class mean and covariance matrix}{subsection.2.2}% 5
+\BOOKMARK [3][-]{subsubsection.2.2.2}{Finding class subspace and projection}{subsection.2.2}% 6
+\BOOKMARK [3][-]{subsubsection.2.2.3}{Calculate the Mahalanobis distance}{subsection.2.2}% 7
+\BOOKMARK [3][-]{subsubsection.2.2.4}{Make the assignment}{subsection.2.2}% 8
+\BOOKMARK [1][-]{section.3}{Experiment Process}{}% 9
+\BOOKMARK [2][-]{subsection.3.1}{Data preparation}{section.3}% 10
+\BOOKMARK [3][-]{subsubsection.3.1.1}{Initialization and exploration}{subsection.3.1}% 11
+\BOOKMARK [3][-]{subsubsection.3.1.2}{Data cleaning}{subsection.3.1}% 12
+\BOOKMARK [2][-]{subsection.3.2}{Modeling preparation}{section.3}% 13
+\BOOKMARK [2][-]{subsection.3.3}{Building algorithm}{section.3}% 14
+\BOOKMARK [2][-]{subsection.3.4}{Result}{section.3}% 15
+\BOOKMARK [1][-]{section.4}{Experiment result and conclusions}{}% 16
